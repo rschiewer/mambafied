@@ -14,8 +14,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mambapy.mamba import Mamba, MambaConfig, RMSNorm
-from mambapy.mamba2 import Mamba2, Mamba2Config
+from mambafied.mamba import Mamba, MambaConfig, RMSNorm
+from mambafied.mamba2 import Mamba2, Mamba2Config
 
 class LM(nn.Module):
     def __init__(self, model_config: Union[MambaConfig, Mamba2Config], vocab_size: int, pad_vocab_size_multiple: int = None):

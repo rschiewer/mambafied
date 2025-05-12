@@ -42,7 +42,7 @@ def map_mambapy_torch_to_mlx(torch_state_dict):
     return new_state_dict
 
 def map_mambassm_torch_to_mlx(torch_state_dict):
-    # convert mambassm to mambapy
+    # convert mambassm to mambafied
     new_state_dict = {}
     for key in torch_state_dict:
         if key == 'backbone.embedding.weight' or key == 'backbone.norm_f.weight':
@@ -52,7 +52,7 @@ def map_mambassm_torch_to_mlx(torch_state_dict):
 
         new_state_dict[new_key] = torch_state_dict[key]
 
-    # convert mambapy to mlx
+    # convert mambafied to mlx
     return map_mambapy_torch_to_mlx(new_state_dict)
 
 """

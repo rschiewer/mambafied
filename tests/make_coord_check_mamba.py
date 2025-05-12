@@ -3,8 +3,8 @@ from torch.utils.data import Dataset, DataLoader
 
 import sys
 sys.path.append('..')
-from mambapy.mamba import MambaConfig
-from mambapy.lm import LM
+from mambafied.mamba import MambaConfig
+from mambafied.lm import LM
 
 from coord_check import get_coord_data, plot_coord_data
 

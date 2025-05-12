@@ -4,7 +4,7 @@ from mamba_ssm import Mamba
 
 import sys
 sys.path.append('..')
-from mambapy.mamba import MambaBlock, MambaConfig
+from mambafied.mamba import MambaBlock, MambaConfig
 
 batch, length, dim = 2, 512, 16
 

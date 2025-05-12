@@ -4,7 +4,7 @@ import torch
 
 import sys
 sys.path.append('..')
-from mamba import MambaBlock, MambaConfig
+from mambafied.mamba import MambaBlock, MambaConfig
 
 Bs, L, D, N = 2, 64, 32, 16
 

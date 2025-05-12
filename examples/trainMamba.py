@@ -8,8 +8,8 @@ from time import perf_counter
 import torch
 import torch.nn.functional as F
 
-from mambapy.mamba_lm import from_pretrained
-from mambapy.mamba_lm import MambaLM, MambaLMConfig
+from mambafied.mamba_lm import from_pretrained
+from mambafied.mamba_lm import MambaLM, MambaLMConfig
 
 from transformers import AutoTokenizer
 import datasets

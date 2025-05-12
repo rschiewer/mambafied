@@ -53,7 +53,7 @@ No embedding, no head : input is `(B, L, D)` and output is `(B, L, D)` as well.
 
 ```python
 import torch
-from mambapy.mamba import Mamba, MambaConfig
+from mambafied.mamba import Mamba, MambaConfig
 
 config = MambaConfig(d_model=16, n_layers=2)
 model = Mamba(config)
@@ -71,20 +71,21 @@ You can also use Mamba-2 by importing the `Mamba2Config` and `Mamba2` objectfs f
 The class `LM` ([lm.py](lm.py)) builds on the `Mamba` or `Mamba-2` objects and offers a classic API for language models. It can be used as follows :
 
 ```python
-from mambapy.lm import LM, MambaConfig
+from mambafied.lm import LM, MambaConfig
 
-config = MambaConfig(d_model=16, n_layers=4) # core model
-model = MambaLM(config, vocab_size=32000) # encapsulate it in a LM
+config = MambaConfig(d_model=16, n_layers=4)  #  core model
+model = MambaLM(config, vocab_size=32000)  #  encapsulate it in a LM
 
 x = torch.randint(high=32000, size=(16, 64))
-logits = model(x) # (B, L, vocab_size)
+logits = model(x)  #  (B, L, vocab_size)
 ```
 
 It simply encapsulates a `Mamba(-2)` object with an embedding layer, a final normalization and a language modeling head.
 
 You can use it off the shelf with a pretrained Mamba model :
+
 ```python
-from mambapy.lm import from_pretrained
+from mambafied.lm import from_pretrained
 from transformers import AutoTokenizer
 
 model = from_pretrained('state-spaces/mamba-130m').to("cuda")
@@ -116,7 +117,7 @@ The API is the same as with the `Mamba` and `MambaLM` models.
 You can load a pretrained Jamba model like so :
 
 ```python
-from mambapy.jamba_lm import from_pretrained
+from mambafied.jamba_lm import from_pretrained
 from transformers import AutoTokenizer
 
 model = from_pretrained('TechxGenus/Mini-Jamba').to("cuda")

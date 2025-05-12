@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mambapy.onnx.mamba_onnx import Mamba, MambaConfig, RMSNorm
+from mambafied.onnx.mamba_onnx import Mamba, MambaConfig, RMSNorm
 
 """
 

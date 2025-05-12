@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mambapy.pscan import pscan
+from mambafied.pscan import pscan
 
 """
 
@@ -44,14 +44,10 @@ class MambaConfig:
     dt_init_floor = 1e-4
 
     rms_norm_eps: float = 1e-5
-    base_std: float = 0.02
 
     bias: bool = False
     conv_bias: bool = True
     inner_layernorms: bool = False # apply layernorms to internal activations
-
-    mup: bool = False
-    mup_base_width: float = 128 # width=d_model
 
     pscan: bool = True # use parallel scan mode or sequential mode when training
     use_cuda: bool = False # use official CUDA implementation when training (not compatible with (b)float16)
@@ -61,10 +57,6 @@ class MambaConfig:
 
         if self.dt_rank == 'auto':
             self.dt_rank = math.ceil(self.d_model / 16)
-
-        # muP
-        if self.mup:
-            self.mup_width_mult = self.d_model / self.mup_base_width
 
 class Mamba(nn.Module):
     def __init__(self, config: MambaConfig):
@@ -84,7 +76,7 @@ class Mamba(nn.Module):
 
         return x
     
-    def step(self, x, caches):
+    def step(self, x, hs, inputs):
         # x : (B, L, D)
         # caches : [cache(layer) for all layers], cache : (h, inputs)
 
@@ -92,16 +84,16 @@ class Mamba(nn.Module):
         # caches : [cache(layer) for all layers], cache : (h, inputs)
 
         for i, layer in enumerate(self.layers):
-            x, caches[i] = layer.step(x, caches[i])
+            x, hs[i], inputs[i] = layer.step(x, hs[i], inputs[i])
 
-        return x, caches
+        return x, hs, inputs
 
 class ResidualBlock(nn.Module):
     def __init__(self, config: MambaConfig):
         super().__init__()
 
         self.mixer = MambaBlock(config)
-        self.norm = RMSNorm(config.d_model, config.rms_norm_eps, config.mup)
+        self.norm = RMSNorm(config.d_model, config.rms_norm_eps)
 
     def forward(self, x):
         # x : (B, L, D)
@@ -111,7 +103,7 @@ class ResidualBlock(nn.Module):
         output = self.mixer(self.norm(x)) + x
         return output
     
-    def step(self, x, cache):
+    def step(self, x, hs, inputs):
         # x : (B, D)
         # cache : (h, inputs)
                 # h : (B, ED, N)
@@ -120,9 +112,9 @@ class ResidualBlock(nn.Module):
         # output : (B, D)
         # cache : (h, inputs)
 
-        output, cache = self.mixer.step(self.norm(x), cache)
+        output, hs, inputs = self.mixer.step(self.norm(x), hs, inputs)
         output = output + x
-        return output, cache
+        return output, hs, inputs
 
 class MambaBlock(nn.Module):
     def __init__(self, config: MambaConfig):
@@ -177,9 +169,9 @@ class MambaBlock(nn.Module):
 
         # used in jamba
         if self.config.inner_layernorms:
-            self.dt_layernorm = RMSNorm(self.config.dt_rank, config.rms_norm_eps, config.mup)
-            self.B_layernorm = RMSNorm(self.config.d_state, config.rms_norm_eps, config.mup)
-            self.C_layernorm = RMSNorm(self.config.d_state, config.rms_norm_eps, config.mup)
+            self.dt_layernorm = RMSNorm(self.config.dt_rank, config.rms_norm_eps)
+            self.B_layernorm = RMSNorm(self.config.d_state, config.rms_norm_eps)
+            self.C_layernorm = RMSNorm(self.config.d_state, config.rms_norm_eps)
         else:
             self.dt_layernorm = None
             self.B_layernorm = None
@@ -207,7 +199,6 @@ class MambaBlock(nn.Module):
         
         # y : (B, L, D)
 
-
         _, L, _ = x.shape
 
         xz = self.in_proj(x) # (B, L, 2*ED)
@@ -223,7 +214,7 @@ class MambaBlock(nn.Module):
 
         if self.config.use_cuda:
             output = self.out_proj(y) # (B, L, D)
-            return output # the rest of the operations are done in the ssm function (fused with the CUDA pscan)
+            return output
 
         # z branch
         z = F.silu(z)
@@ -348,7 +339,7 @@ class MambaBlock(nn.Module):
     As we need one such cache variable per layer, we store a caches object, which is simply a list of cache object. (See mamba_lm.py)
     """
     
-    def step(self, x, cache):
+    def step(self, x, hs, inputs):
         # x : (B, D)
         # cache : (h, inputs)
                 # h : (B, ED, N)
@@ -357,7 +348,7 @@ class MambaBlock(nn.Module):
         # y : (B, D)
         # cache : (h, inputs)
         
-        h, inputs = cache
+        h, inputs = hs, inputs
         
         xz = self.in_proj(x) # (B, 2*ED)
         x, z = xz.chunk(2, dim=1) # (B, ED), (B, ED)
@@ -377,9 +368,9 @@ class MambaBlock(nn.Module):
 
         # prepare cache for next call
         inputs = torch.cat([inputs[:, :, 1:], x_cache], dim=2) # (B, ED, d_conv-1)
-        cache = (h, inputs)
+        # cache = (h, inputs)
         
-        return output, cache
+        return output, h, inputs
 
     def ssm_step(self, x, h):
         # x : (B, ED)
@@ -413,22 +404,16 @@ class MambaBlock(nn.Module):
 
         return y, h
 
+# taken straight from https://github.com/johnma2006/mamba-minimal/blob/master/model.py
 class RMSNorm(nn.Module):
-    def __init__(self, d_model: int, eps: float = 1e-5, use_mup: bool = False):
+    def __init__(self, d_model: int, eps: float = 1e-5):
         super().__init__()
 
-        self.use_mup = use_mup
         self.eps = eps
-
-        # https://arxiv.org/abs/2404.05728, RMSNorm gains prevents muTransfer (section 4.2.3)
-        if not use_mup:
-            self.weight = nn.Parameter(torch.ones(d_model))
+        self.weight = nn.Parameter(torch.ones(d_model))
 
     def forward(self, x):
-        output = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        output = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
 
-        if not self.use_mup:
-            return output * self.weight
-        else:
-            return output
+        return output
     

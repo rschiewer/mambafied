@@ -17,9 +17,9 @@ import torch.nn.functional as F
 
 import sys
 sys.path.append('..')
-from mambapy.mamba import MambaConfig
-from mambapy.mamba2 import Mamba2Config
-from mambapy.lm import LM
+from mambafied.mamba import MambaConfig
+from mambafied.mamba2 import Mamba2Config
+from mambafied.lm import LM
 
 # Config & helpers
 torch.backends.cuda.matmul.allow_tf32 = True

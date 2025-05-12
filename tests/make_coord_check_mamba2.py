@@ -5,8 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 
 import sys
 sys.path.append('..')
-from mambapy.mamba2 import Mamba2Config
-from mambapy.lm import LM
+from mambafied.mamba2 import Mamba2Config
+from mambafied.lm import LM
 
 from coord_check import get_coord_data, plot_coord_data
 
