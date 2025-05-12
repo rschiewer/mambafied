@@ -1,3 +1,45 @@
+# This is a fork of the repository https://github.com/alxndrTL/mamba.py
+This version of Mamba permits the use of caches when processing whole sequences via the optimized pscan. 
+Concretely, to provide a cache or "model state" from previous model invocations and maintain it for future invocations, it was previously necessary to use the step method:
+
+```python
+import torch
+from mambapy.mamba import Mamba, MambaConfig
+
+config = MambaConfig(d_model=16, n_layers=2)
+model = Mamba(config)
+
+B, L, D = 2, 64, 16
+seq = torch.randn(B, L, D)
+
+seq_proc = []
+caches = None
+for token in seq:
+    proc_t, caches = model.step(token, caches=caches)
+    seq_proc.append(proc_t)
+seq_proc = torch.stack(seq_proc, 0)
+# use seq_proc and caches for downstream tasks
+```
+
+This is inefficient and slow, which is particularly noticeable for longer sequences (consider speed comparison graph below). With this version of the code, the following use case is supported:
+
+```python
+import torch
+from mambafied.mamba import Mamba, MambaConfig
+
+config = MambaConfig(d_model=16, n_layers=2)
+model = Mamba(config)
+
+B, L, D = 2, 64, 16
+seq = torch.randn(B, L, D)
+caches = None
+seq_proc, caches = model(seq, caches=caches)
+# use seq_proc and caches for downstream tasks
+```
+
+Note that the above code internally uses the optimized python selective scan implementation from the [original repo](https://github.com/alxndrTL/mamba.py).
+The optimized cuda kernel does currently not support the use of caches.
+
 # mamba.py 🐍 : a simple and efficient Mamba implementation
 A straightfoward implementation of [Mamba](https://arxiv.org/abs/2312.00752) in PyTorch with a simple parallel scan implementation, offering an major speedup over a sequential implementation, as the parallel scan allows the parallelization over the time dimension.
 It combines the ease of read with good performances when training. Few other functionalities are implemented, like [Jamba](https://www.ai21.com/blog/announcing-jamba), [Vision Mamba](https://arxiv.org/abs/2401.09417) as well as [muP](https://arxiv.org/abs/2203.03466).
