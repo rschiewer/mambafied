@@ -243,7 +243,7 @@ class MambaBlock(nn.Module):
             x = self.conv1d(x)[:, :, :L] # depthwise convolution over time, with a short filter
         else:
             # first get the last d_conv input tokens, then process x
-            inputs = torch.cat([cache[1], x], dim=2)[:, :, -d_conv+1]
+            inputs = torch.cat([cache[1], x], dim=2)[:, :, -d_conv+1:]
 
             # now process x with cache
             x = self.conv1d(torch.cat([cache[1], x], dim=2))[:, :, d_conv-1:L+d_conv-1]  #  depthwise convolution over time, with a short filter

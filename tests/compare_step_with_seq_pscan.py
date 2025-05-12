@@ -18,8 +18,10 @@ model = Mamba(config).to("mps")
 
 # y : (Bs, L, ED)
 
-x1 = torch.randn(Bs, L//2, D).to("mps") # x.requieres_grad = True
-x2 = torch.randn(Bs, L//2, D).to("mps")
+x1 = torch.randn(Bs, L//4, D).to("mps") # x.requieres_grad = True
+x2 = torch.randn(Bs, L//4, D).to("mps")
+x3 = torch.randn(Bs, L//4, D).to("mps")
+x4 = torch.randn(Bs, L//4, D).to("mps")
 
 
 # Optimized Pscan Mode -----------------------------------------------------------------------------
@@ -27,9 +29,9 @@ x2 = torch.randn(Bs, L//2, D).to("mps")
 cache_pscan = None
 y_pscan_1, cache_pscan = model(x1, caches=cache_pscan)
 y_pscan_2, cache_pscan = model(x2, caches=cache_pscan)
-y_pscan = torch.cat([y_pscan_1, y_pscan_2], dim=1)
-
-
+y_pscan_3, cache_pscan = model(x3, caches=cache_pscan)
+y_pscan_4, cache_pscan = model(x4, caches=cache_pscan)
+y_pscan = torch.cat([y_pscan_1, y_pscan_2, y_pscan_3, y_pscan_4], dim=1)
 
 # Python Loop with Step ----------------------------------------------------------------------------
 
@@ -41,7 +43,7 @@ layer_cache = (torch.zeros(Bs, ED, N, dtype=x1.dtype, device=x1.device),
 cache_seq = [layer_cache for _ in range(n_layers)]
 
 y_seq = []
-x_complete = torch.cat([x1, x2], dim=1)
+x_complete = torch.cat([x1, x2, x3, x4], dim=1)
 for t in range(L):
     x_t = x_complete[:, t]
     y_t, cache_seq = model.step(x_t, caches=cache_seq)
