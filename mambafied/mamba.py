@@ -246,7 +246,7 @@ class MambaBlock(nn.Module):
             inputs = torch.cat([cache[1], x], dim=2)[:, :, -d_conv+1]
 
             # now process x with cache
-            x = self.conv1d(torch.cat([cache[1], x], dim=2))[:, :, d_conv:L]  #  depthwise convolution over time, with a short filter
+            x = self.conv1d(torch.cat([cache[1], x], dim=2))[:, :, d_conv-1:L+d_conv-1]  #  depthwise convolution over time, with a short filter
         x = x.transpose(1, 2) # (B, L, ED)
 
         x = F.silu(x)
@@ -333,9 +333,15 @@ class MambaBlock(nn.Module):
                                              value=0)
             # prepend last invocation's h to BX
             h = cache[0]
-            BX = torch.concat([h, BX], dim=1)
+            BX = torch.concat([h.unsqueeze(1), BX], dim=1)
+
+            deltaA = deltaA.contiguous()
+            BX = BX.contiguous()
         
         hs = pscan(deltaA, BX)
+        # remove first padding time step
+        if cache is not None:
+            hs = hs[:, 1:]
 
         y = (hs @ C.unsqueeze(-1)).squeeze(3) # (B, L, ED, N) @ (B, L, N, 1) -> (B, L, ED, 1)
 
