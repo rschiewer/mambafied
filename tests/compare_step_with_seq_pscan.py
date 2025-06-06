@@ -29,10 +29,10 @@ y = torch.randn(Bs, L, D).to("mps")
 
 # forward
 cache_pscan = None
-y_pscan_1, cache_pscan = model(x1, caches=cache_pscan)
-y_pscan_2, cache_pscan = model(x2, caches=cache_pscan)
-y_pscan_3, cache_pscan = model(x3, caches=cache_pscan)
-y_pscan_4, cache_pscan = model(x4, caches=cache_pscan)
+y_pscan_1, h_pscan_1, cache_pscan = model(x1, caches=cache_pscan)
+y_pscan_2, h_pscan_2, cache_pscan = model(x2, caches=cache_pscan)
+y_pscan_3, h_pscan_3, cache_pscan = model(x3, caches=cache_pscan)
+y_pscan_4, h_pscan_4, cache_pscan = model(x4, caches=cache_pscan)
 y_pscan = torch.cat([y_pscan_1, y_pscan_2, y_pscan_3, y_pscan_4], dim=1)
 
 # backward

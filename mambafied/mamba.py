@@ -84,10 +84,11 @@ class Mamba(nn.Module):
         if caches is None:
             caches = [None for _ in self.layers]
 
+        hs_last_layer = None
         for i, layer in enumerate(self.layers):
-            x, caches[i] = layer(x, caches[i])
+            x, hs_last_layer, caches[i] = layer(x, caches[i])
 
-        return x, caches
+        return x, hs_last_layer, caches
     
     def step(self, x, caches):
         # x : (B, L, D)
@@ -116,9 +117,9 @@ class ResidualBlock(nn.Module):
 
         # output : (B, L, D)
 
-        output, cache = self.mixer(self.norm(x), cache)
+        output, hs, cache = self.mixer(self.norm(x), cache)
         output = output + x
-        return output, cache
+        return output, hs, cache
     
     def step(self, x, cache):
         # x : (B, D)
@@ -250,7 +251,7 @@ class MambaBlock(nn.Module):
         x = x.transpose(1, 2) # (B, L, ED)
 
         x = F.silu(x)
-        y, h = self.ssm(x, z, cache=cache)
+        y, hs = self.ssm(x, z, cache=cache)
 
         if self.config.use_cuda:
             output = self.out_proj(y) # (B, L, D)
@@ -262,9 +263,9 @@ class MambaBlock(nn.Module):
         output = y * z
         output = self.out_proj(output) # (B, L, D)
 
-        cache = (h, inputs)
+        cache = (hs[:, -1], inputs)
 
-        return output, cache
+        return output, hs, cache
     
     def ssm(self, x, z, cache=None):
         # x : (B, L, ED)
@@ -309,7 +310,7 @@ class MambaBlock(nn.Module):
             else:
                 y, hs = self.selective_scan_seq(x, delta, A, B, C, D, cache=cache)
 
-        return y, hs[:, -1]
+        return y, hs
     
     def selective_scan(self, x, delta, A, B, C, D, cache=None):
         # x : (B, L, ED)
@@ -331,9 +332,13 @@ class MambaBlock(nn.Module):
             # prepend one time step of zeros to deltaA
             deltaA = torch.nn.functional.pad(deltaA, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',
                                              value=0)
+            # handcrafted padding that avoids the use of nn.functional.pad
+            #A_0 = torch.zeros_like(deltaA[:, 0])
+            #deltaA = torch.cat([A_0.unsqueeze(1), deltaA], dim=1)
+
             # prepend last invocation's h to BX
             h = cache[0]
-            BX = torch.concat([h.unsqueeze(1), BX], dim=1)
+            BX = torch.cat([h.unsqueeze(1), BX], dim=1)
 
             deltaA = deltaA.contiguous()
             BX = BX.contiguous()
