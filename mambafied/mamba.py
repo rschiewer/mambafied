@@ -515,7 +515,7 @@ class GNI(nn.Module):
 
     def forward(self, x):
         B, T, D = x.shape
-        flat = x.view(B, -1)                    # [B, F], F = T*D
+        flat = x.reshape(B, -1)                    # [B, F], F = T*D
 
         with torch.no_grad():
             μ = flat.mean(dim=1, keepdim=True)  # [B, 1]
@@ -525,11 +525,11 @@ class GNI(nn.Module):
             ghosts = flat[idx, torch.arange(B)] # [ghost_bs, B, F]
 
             # Collapse ghost-bs and feature dims to derive per-sample scalar stats:
-            μg = ghosts.view(self.ghost_bs, B, -1).mean(dim=(0, 2), keepdim=True)  # [1,1] → broadcastable
-            σg2 = ghosts.view(self.ghost_bs, B, -1).var(dim=(0, 2), unbiased=False, keepdim=True)
+            μg = ghosts.reshape(self.ghost_bs, B, -1).mean(dim=(0, 2), keepdim=True)  # [1,1] → broadcastable
+            σg2 = ghosts.reshape(self.ghost_bs, B, -1).var(dim=(0, 2), unbiased=False, keepdim=True)
 
         shift = μg - μ                           # [B, F] due to broadcasting
         scale = torch.sqrt((σg2 + self.eps) / (σ2 + self.eps))
 
         out = (flat - shift) / scale            # [B, F]
-        return out.view(B, T, D)
+        return out.reshape(B, T, D)
