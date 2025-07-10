@@ -46,6 +46,8 @@ class MambaConfig:
     rms_norm_eps: float = 1e-5
     base_std: float = 0.02
 
+    use_gni: bool = False
+
     bias: bool = False
     conv_bias: bool = True
     inner_layernorms: bool = False # apply layernorms to internal activations
@@ -108,6 +110,9 @@ class ResidualBlock(nn.Module):
 
         self.mixer = MambaBlock(config)
         self.norm = RMSNorm(config.d_model, config.rms_norm_eps, config.mup)
+        self.use_gni = config.use_gni
+        if self.use_gni:
+            self.gni = GNI()
 
     def forward(self, x, cache=None):
         # x : (B, L, D)
@@ -117,7 +122,12 @@ class ResidualBlock(nn.Module):
 
         # output : (B, L, D)
 
-        output, hs, cache = self.mixer(self.norm(x), cache)
+        if self.use_gni:
+            x_norm_noise = self.gni(self.norm(x))
+        else:
+            x_norm_noise = self.norm(x)
+
+        output, hs, cache = self.mixer(x_norm_noise, cache)
         output = output + x
         return output, hs, cache
     
@@ -330,11 +340,12 @@ class MambaBlock(nn.Module):
         if cache is not None:
             # inject last invocation's h
             # prepend one time step of zeros to deltaA
-            deltaA = torch.nn.functional.pad(deltaA, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',
-                                             value=0)
+            #deltaA = torch.nn.functional.pad(deltaA, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',
+            #                                 value=0)
+            # note that the contents of A_0 don't matter, since h_0 = 0
+            A_0 = torch.zeros_like(deltaA[:, 0])
             # handcrafted padding that avoids the use of nn.functional.pad
-            #A_0 = torch.zeros_like(deltaA[:, 0])
-            #deltaA = torch.cat([A_0.unsqueeze(1), deltaA], dim=1)
+            deltaA = torch.cat([A_0.unsqueeze(1), deltaA], dim=1)
 
             # prepend last invocation's h to BX
             h = cache[0]
@@ -495,4 +506,30 @@ class RMSNorm(nn.Module):
             return output * self.weight
         else:
             return output
-    
+
+class GNI(nn.Module):
+    def __init__(self, ghost_bs=32, eps=1e-5):
+        super().__init__()
+        self.ghost_bs = ghost_bs
+        self.eps = eps
+
+    def forward(self, x):
+        B, T, D = x.shape
+        flat = x.view(B, -1)                    # [B, F], F = T*D
+
+        with torch.no_grad():
+            μ = flat.mean(dim=1, keepdim=True)  # [B, 1]
+            σ2 = flat.var(dim=1, keepdim=True)
+
+            idx = torch.randint(0, B, (self.ghost_bs, B), device=x.device)
+            ghosts = flat[idx, torch.arange(B)] # [ghost_bs, B, F]
+
+            # Collapse ghost-bs and feature dims to derive per-sample scalar stats:
+            μg = ghosts.view(self.ghost_bs, B, -1).mean(dim=(0, 2), keepdim=True)  # [1,1] → broadcastable
+            σg2 = ghosts.view(self.ghost_bs, B, -1).var(dim=(0, 2), unbiased=False, keepdim=True)
+
+        shift = μg - μ                           # [B, F] due to broadcasting
+        scale = torch.sqrt((σg2 + self.eps) / (σ2 + self.eps))
+
+        out = (flat - shift) / scale            # [B, F]
+        return out.view(B, T, D)
