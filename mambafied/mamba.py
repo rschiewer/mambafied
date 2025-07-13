@@ -513,10 +513,13 @@ class RMSNorm(nn.Module):
             return output
 
 class ASNI(nn.Module):
+
+    _sqrt_1 = torch.tensor(1.0).sqrt()
+
     def __init__(self):
         super().__init__()
 
-    def forward(self, x):
+    def forward_(self, x):
         B, T, D = x.shape
         d_cov = T * D
         flat = x.reshape(B, d_cov)
@@ -526,9 +529,23 @@ class ASNI(nn.Module):
         cov += 1e-2 * torch.eye(d_cov, device=x.device)
         sample = MultivariateNormal(torch.zeros(d_cov, dtype=x.dtype, device=x.device), cov).sample()
         sample = sample.unsqueeze(0).expand(B, -1)
-        ret = flat * (torch.sqrt(torch.tensor(1.0, dtype=x.dtype, device=x.device)) * sample + torch.ones_like(flat))
+        ret = flat * (self._sqrt_1.to(x) * sample + torch.ones_like(flat))
         ret = ret.reshape(B, T, D)
         return ret
+
+    def forward(self, x):
+        B, T, D = x.shape
+        flat = x.reshape(B * T, D)
+        mean = flat.mean(dim=0, keepdim=True)
+        flat_center = (flat - mean)
+        cov = flat_center.t() @ flat_center / (B * T)
+        cov += 1e-2 * torch.eye(D, device=x.device)
+        sample = MultivariateNormal(torch.zeros(D, dtype=x.dtype, device=x.device), cov).sample()
+        sample = sample.unsqueeze(0).expand(B * T, -1)
+        ret = flat * (self._sqrt_1.to(x) * sample + torch.ones_like(flat))
+        ret = ret.reshape(B, T, D)
+        return ret
+
 
 class GNI(nn.Module):
     def __init__(self, ghost_bs=32, eps=1e-5):
