@@ -5,6 +5,7 @@ from typing import Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import MultivariateNormal
 
 from mambafied.pscan import pscan
 
@@ -47,6 +48,7 @@ class MambaConfig:
     base_std: float = 0.02
 
     use_gni: bool = False
+    use_asni: bool = False
 
     bias: bool = False
     conv_bias: bool = True
@@ -111,8 +113,9 @@ class ResidualBlock(nn.Module):
         self.mixer = MambaBlock(config)
         self.norm = RMSNorm(config.d_model, config.rms_norm_eps, config.mup)
         self.use_gni = config.use_gni
-        if self.use_gni:
-            self.gni = GNI()
+        self.use_asni = config.use_asni
+        self.gni = GNI() if self.use_gni else None
+        self.asni = ASNI() if self.use_asni else None
 
     def forward(self, x, cache=None):
         # x : (B, L, D)
@@ -122,10 +125,12 @@ class ResidualBlock(nn.Module):
 
         # output : (B, L, D)
 
+        x_norm_noise = self.norm(x)
+
         if self.use_gni:
-            x_norm_noise = self.gni(self.norm(x))
-        else:
-            x_norm_noise = self.norm(x)
+            x_norm_noise = self.gni(x_norm_noise)
+        if self.use_asni:
+            x_norm_noise = self.asni(x_norm_noise)
 
         output, hs, cache = self.mixer(x_norm_noise, cache)
         output = output + x
@@ -507,11 +512,29 @@ class RMSNorm(nn.Module):
         else:
             return output
 
+class ASNI(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        B, T, D = x.shape
+        d_cov = T * D
+        flat = x.reshape(B, d_cov)
+        mean = flat.mean(dim=0, keepdim=True)
+        flat_center = (flat - mean)
+        cov = flat_center.t() @ flat_center / B
+        cov += 1e-2 * torch.eye(d_cov, device=x.device)
+        sample = MultivariateNormal(torch.zeros(d_cov, dtype=x.dtype, device=x.device), cov).sample()
+        sample = sample.unsqueeze(0).expand(B, -1)
+        ret = flat * (torch.sqrt(torch.tensor(1.0, dtype=x.dtype, device=x.device)) * sample + torch.ones_like(flat))
+        ret = ret.reshape(B, T, D)
+        return ret
+
 class GNI(nn.Module):
     def __init__(self, ghost_bs=32, eps=1e-5):
         super().__init__()
-        self.ghost_bs = ghost_bs
         self.eps = eps
+        self.ghost_bs = ghost_bs
 
     def forward(self, x):
         B, T, D = x.shape
@@ -532,4 +555,4 @@ class GNI(nn.Module):
         scale = torch.sqrt((σg2 + self.eps) / (σ2 + self.eps))
 
         out = (flat - shift) / scale            # [B, F]
-        return out.reshape(B, T, D)
+        return out.reshape(B, T, D).contiguous()
