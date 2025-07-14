@@ -112,7 +112,6 @@ class ResidualBlock(nn.Module):
 
         self.mixer = MambaBlock(config)
         self.norm = RMSNorm(config.d_model, config.rms_norm_eps, config.mup)
-        self.use_gni = config.use_gni
         self.use_asni = config.use_asni
         self.asni = ASNI(config.asni_time_independent) if self.use_asni else None
 
