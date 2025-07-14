@@ -10,7 +10,7 @@ from mambafied.mamba import Mamba, MambaConfig
 Bs, L, D, N = 2, 64, 7, 16
 n_layers = 2
 
-config = MambaConfig(d_model=D, n_layers=n_layers, use_cuda=False, use_asni=False)
+config = MambaConfig(d_model=D, n_layers=n_layers, use_cuda=False, use_asni=False, asni_time_independent=False)
 model = Mamba(config).to("cuda")
 optim = torch.optim.Adam(model.parameters())
 

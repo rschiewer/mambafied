@@ -47,8 +47,8 @@ class MambaConfig:
     rms_norm_eps: float = 1e-5
     base_std: float = 0.02
 
-    use_gni: bool = False
     use_asni: bool = False
+    asni_time_independent: bool = False
 
     bias: bool = False
     conv_bias: bool = True
@@ -114,8 +114,7 @@ class ResidualBlock(nn.Module):
         self.norm = RMSNorm(config.d_model, config.rms_norm_eps, config.mup)
         self.use_gni = config.use_gni
         self.use_asni = config.use_asni
-        self.gni = GNI() if self.use_gni else None
-        self.asni = ASNI() if self.use_asni else None
+        self.asni = ASNI(config.asni_time_independent) if self.use_asni else None
 
     def forward(self, x, cache=None):
         # x : (B, L, D)
@@ -125,14 +124,12 @@ class ResidualBlock(nn.Module):
 
         # output : (B, L, D)
 
-        x_norm_noise = self.norm(x)
+        x_norm = self.norm(x)
 
-        if self.use_gni:
-            x_norm_noise = self.gni(x_norm_noise)
         if self.use_asni:
-            x_norm_noise = self.asni(x_norm_noise)
+            x_norm = self.asni(x_norm)
 
-        output, hs, cache = self.mixer(x_norm_noise, cache)
+        output, hs, cache = self.mixer(x_norm, cache)
         output = output + x
         return output, hs, cache
     
@@ -512,14 +509,24 @@ class RMSNorm(nn.Module):
         else:
             return output
 
+# see https://arxiv.org/abs/1909.09819
+# and https://github.com/BeyremKh/ASNI/blob/master/Simul_struc_drop_fast.ipynb
 class ASNI(nn.Module):
 
-    _sqrt_1 = torch.tensor(1.0).sqrt()
+    _sqrt_1 = torch.tensor(1.0).sqrt().requires_grad_(False)
 
-    def __init__(self):
+    def __init__(self, time_independent: bool):
         super().__init__()
+        self.time_independent = time_independent
 
-    def forward_(self, x):
+    def forward(self, x: torch.Tensor):
+        if self.time_independent:
+            return self._forward_time_independent(x)
+        else:
+            return self._forward_time_dependent(x)
+
+    # treat the complete time series that represent a batch item as a single data point
+    def _forward_time_dependent(self, x: torch.Tensor):
         B, T, D = x.shape
         d_cov = T * D
         flat = x.reshape(B, d_cov)
@@ -533,7 +540,8 @@ class ASNI(nn.Module):
         ret = ret.reshape(B, T, D)
         return ret
 
-    def forward(self, x):
+    # treat time as another batch dimension
+    def _forward_time_independent(self, x: torch.Tensor):
         B, T, D = x.shape
         flat = x.reshape(B * T, D)
         mean = flat.mean(dim=0, keepdim=True)
