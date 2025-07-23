@@ -15,7 +15,7 @@ def npo2(len):
     Returns the next power of 2 above len
     """
 
-    return 2 ** math.ceil(math.log2(len))
+    return 2 ** math.ceil(math.log(len) / math.log(2))
 
 def pad_npo2(X):
     """
@@ -46,7 +46,7 @@ class PScan(torch.autograd.Function):
         # only supports L that is a power of two (mainly for a clearer code)
         
         B, D, L, _ = A.size()
-        num_steps = int(math.log2(L))
+        num_steps = int(math.log(L) / math.log(2))
 
         # up sweep (last 2 steps unfolded)
         Aa = A
@@ -103,7 +103,7 @@ class PScan(torch.autograd.Function):
         # only supports L that is a power of two (mainly for a clearer code)
 
         B, D, L, _ = A.size()
-        num_steps = int(math.log2(L))
+        num_steps = int(math.log(L) / math.log(2))
 
         # up sweep (last 2 steps unfolded)
         Aa = A

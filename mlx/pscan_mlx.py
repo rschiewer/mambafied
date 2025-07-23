@@ -42,7 +42,9 @@ def pscan_f(A, X):
 
     B, D, L, _ = A.shape
 
-    num_steps = int(math.log2(L))
+    # this causes an error during compilation
+    #num_steps = int(math.log2(L))
+    num_steps = int(math.log(L) / math.log(2))
 
     # up sweep
     for k in range(num_steps):
