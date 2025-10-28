@@ -9,9 +9,15 @@ from mambafied.mamba import Mamba, MambaConfig
 
 Bs, L, D, N = 2, 64, 7, 16
 n_layers = 2
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+elif torch.mps.is_available():
+    device = torch.device('mps')
+else:
+    device = torch.device('cpu')
 
 config = MambaConfig(d_model=D, n_layers=n_layers, use_cuda=False, use_asni=False, asni_time_independent=False)
-model = Mamba(config).to("cuda")
+model = Mamba(config).to(device)
 optim = torch.optim.Adam(model.parameters())
 
 # API for selective_scan() and selective_scan_seq()
@@ -19,11 +25,11 @@ optim = torch.optim.Adam(model.parameters())
 
 # y : (Bs, L, ED)
 
-x1 = torch.randn(Bs, L//4, D).to("cuda")
-x2 = torch.randn(Bs, L//4, D).to("cuda")
-x3 = torch.randn(Bs, L//4, D).to("cuda")
-x4 = torch.randn(Bs, L//4, D).to("cuda")
-y = torch.randn(Bs, L, D).to("cuda")
+x1 = torch.randn(Bs, L//4, D).to(device)
+x2 = torch.randn(Bs, L//4, D).to(device)
+x3 = torch.randn(Bs, L//4, D).to(device)
+x4 = torch.randn(Bs, L//4, D).to(device)
+y = torch.randn(Bs, L, D).to(device)
 
 # Optimized Pscan Mode -----------------------------------------------------------------------------
 
