@@ -89,10 +89,12 @@ class Mamba(nn.Module):
             caches = [None for _ in self.layers]
 
         hs_last_layer = None
+        new_caches = []
         for i, layer in enumerate(self.layers):
-            x, hs_last_layer, caches[i] = layer(x, caches[i])
+            x, hs_last_layer, cache = layer(x, caches[i])
+            new_caches.append(cache)
 
-        return x, hs_last_layer, caches
+        return x, hs_last_layer, new_caches
     
     def step(self, x, caches):
         # x : (B, L, D)
@@ -101,10 +103,12 @@ class Mamba(nn.Module):
         # y : (B, L, D)
         # caches : [cache(layer) for all layers], cache : (h, inputs)
 
+        new_caches = []
         for i, layer in enumerate(self.layers):
-            x, caches[i] = layer.step(x, caches[i])
+            x, cache = layer.step(x, caches[i])
+            new_caches.append(cache)
 
-        return x, caches
+        return x, new_caches
 
 class ResidualBlock(nn.Module):
     def __init__(self, config: MambaConfig):
@@ -354,7 +358,7 @@ class MambaBlock(nn.Module):
 
             deltaA = deltaA.contiguous()
             BX = BX.contiguous()
-        
+
         hs = pscan(deltaA, BX)
         # remove first padding time step
         if cache is not None:
