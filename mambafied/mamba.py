@@ -294,8 +294,8 @@ class MambaBlock(nn.Module):
         if self.config.use_cuda:
             assert cache is None, 'CUDA implementation can\'t be used with cache'
 
-        A = -torch.exp(self.A_log.float()) # (ED, N)
-        D = self.D.float()
+        A = -torch.exp(self.A_log.to(x.dtype)) # (ED, N)
+        D = self.D.to(x.dtype)
 
         deltaBC = self.x_proj(x) # (B, L, dt_rank+2*N)
         delta, B, C = torch.split(deltaBC, [self.config.dt_rank, self.config.d_state, self.config.d_state], dim=-1) # (B, L, dt_rank), (B, L, N), (B, L, N)
@@ -313,7 +313,7 @@ class MambaBlock(nn.Module):
             z = z.transpose(1, 2)
 
             # "softplus" + "bias" + "y * silu(z)" operations are fused
-            y = self.selective_scan_cuda(x, delta, A, B, C, D, z=z, delta_softplus=True, delta_bias=self.dt_proj.bias.float())
+            y = self.selective_scan_cuda(x, delta, A, B, C, D, z=z, delta_softplus=True, delta_bias=self.dt_proj.bias.to(x.dtype))
             y = y.transpose(1, 2) # (B, L, ED)
         
         else:
@@ -468,8 +468,8 @@ class MambaBlock(nn.Module):
         # y : (B, ED)
         # h : (B, ED, N)
 
-        A = -torch.exp(self.A_log.float()) # (ED, N) # todo : ne pas le faire tout le temps, puisque c'est indépendant de la timestep
-        D = self.D.float()
+        A = -torch.exp(self.A_log.to(x.dtype)) # (ED, N) # todo : ne pas le faire tout le temps, puisque c'est indépendant de la timestep
+        D = self.D.to(x.dtype)
 
         deltaBC = self.x_proj(x) # (B, dt_rank+2*N)
 
